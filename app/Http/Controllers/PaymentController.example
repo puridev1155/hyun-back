@@ -1,0 +1,113 @@
+<?php
+
+namespace App\Http\Controllers;
+
+use Carbon\Carbon;
+use App\Models\Post;
+use App\Models\User;
+use App\Models\Qrcodeinfo;
+use App\Models\Payment;
+use Illuminate\Http\Request;
+use App\Http\Resources\PostResource;
+use App\Http\Resources\AuditionResource;
+use App\Http\Resources\PostPageResource;
+use App\Http\Requests\PostRequest;
+use App\Http\Requests\GetPostRequest;
+use Illuminate\Support\Facades\Auth;
+use Srmklive\PayPal\Services\PayPal as PayPalClient;
+use Illuminate\Support\Facades\Cache;
+use Spatie\QueryBuilder\QueryBuilder;
+use Spatie\QueryBuilder\AllowedFilter;
+
+class PaymentController extends Controller
+{
+    public function payment(Request $request) {
+
+        //$validated = $request->validated();
+        $validated['id'] = $request->id;
+        
+        //TODO 더 간단하게 수정 그리고 데이터 불러오기 방법
+        $payment = Payment::where('id', $validated['id'])->update($request->all());
+        $payment = Payment::where('id', $validated['id'])->first();
+
+        //PAYPAL 결제
+        $provider = new PayPalClient;
+        $provider->setApiCredentials(config('paypal'));
+        $paypalToken = $provider->getAccessToken();
+
+        $response = $provider->createOrder([
+            "intent" => "CAPTURE",
+            "application_context" => [
+                "brand_name" => $payment['title'],
+                "locale" => "en-US",
+                  "return_url" => route("post_success", ['id' => $payment['id']]),
+                  "cancel_url" => route("post_cancel")
+            ],
+            "purchase_units" => [
+                0 => [
+                    "amount" => [
+                        "currency_code" => "USD",
+                        "value" => $payment['price'] * (int)$payment['amount']
+                    ]
+                ]
+                    ],
+                    'items' => [
+                       [ 'name' => $payment['title'],
+                        'quantity' => $payment['amount'],
+                        'unit_amount' => [
+                            'currency_code' => 'USD',
+                            'value' => $payment['price']
+                        ]]
+                    ]
+        ]);
+
+        if(isset($response['id']) && $response['id'] != null ) {
+            foreach ($response['links'] as $links) {
+                if ($links['rel'] == 'approve') {   
+                    return redirect()->away($links['href']);
+                }
+            }
+
+            return redirect()->route('post_cancel');
+        }
+
+    
+        //TODO 코드 정리 //QR코드 등록
+        QrcodeInfo::updateOrCreate([
+            'model_type' => 'payment',
+            'model_id' => $payment['id'],
+            'post_id' => $payment['pay_id'],
+            'user_id' => Auth::user()->id,
+            'usage' => 0
+        ]) ;
+
+    }
+
+    public function success(Request $request) {
+    
+            $provider = new PaypalClient;
+            $provider->setApiCredentials(config('paypal'));
+            $paypalToken = $provider->getAccessToken();
+            $response = $provider->capturePaymentOrder($request->token);
+    
+            //결제 처리 완료
+            $payment = Payment::where('id', $request->id)->first();
+            $payment->update(['status' => 'paid', 'payuser_id' => $request->PayerID]);
+            
+    
+           return response()->json(['success' => true, 'message' => "Payment Is Successful!"]); 
+           // if(isset($response['status']) && $response['status'] == 'COMPLETED') { 
+           //     //결제 처리 완료
+           //     $payment = Payment::where('id', $id)->first();
+           //     $payment->update(['status' => 'paid']);
+           //     return response()->json(['success' => true, 'message' => "Payment Is Successful!"]); 
+           // } else {
+           //     return response()->json(['success' => false, 'message' => "Payment Is Cancel"]); 
+           // }
+        }
+    
+    public function cancel()
+    {
+        return response()->json(['success' => false, 'message' => "Payment Is Cancel"]); 
+    }
+}
