@@ -34,7 +34,6 @@ class PostController extends Controller
     // 전체 티켓 - 최신 10개, 날짜에 맞춰서 진행중, 종료 분별해서  보내주기
     // (title, cost, memo, banner)
     $itemsPerPage = $request->itemsPerPage ? $request->itemsPerPage : 10;
-    $lang = $request->lang_id ? $request->lang_id : 1;
 
 
     //페이지네이션 가능한 POST
@@ -44,18 +43,6 @@ class PostController extends Controller
         // filter (in url): ?filter[key]=value&filter[key]=value...
         // sort (in url): ?sort=key, key... (decending if -key)
         $posts = QueryBuilder::for(Post::class)
-        ->selectRaw('posts.id, posts.lang_id, posts.title, posts.post_type, posts.title, posts.category_id, posts.memo_price, posts.public, posts.memo_info, posts.view_count');
-        if($request->category) {
-            $posts = $posts->where('category_id', $request->category);
-        }
-
-        $posts = $posts->where('lang_id', $lang)
-        ->where('board', null)
-        ->allowedFilters([
-            'title' //제목
-            ])
-        ->defaultSort('-created_at')
-        ->allowedSorts(['country_id', 'title', 'view_count', 'memo_price', 'end_date', 'created_at'])
         ->paginate($itemsPerPage);
         $posts = PostPageResource::collection($posts);
         Cache::put('posts', $posts, 3);

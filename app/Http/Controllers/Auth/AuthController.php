@@ -239,6 +239,7 @@ class AuthController extends Controller
 
     }
 
+    
     public function show(Request $request)
     {
 
