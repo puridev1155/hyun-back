@@ -15,6 +15,7 @@ yarn-error.log
 /.fleet
 /.idea
 /.vscode
+/storage
 
 /database/migrations/2023_01_28_081921_create_meetings_table.php
 /app/Models/Meeting.php
