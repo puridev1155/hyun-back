@@ -2,28 +2,43 @@
 
 namespace App\Models;
 
-use App\Models\Country;
-use App\Models\Category;
-use Spatie\MediaLibrary\HasMedia;
-use Illuminate\Database\Eloquent\Model;
-use Spatie\MediaLibrary\InteractsWithMedia;
-use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Model;
+use Illuminate\Support\Facades\Storage;
 
-class Banner extends Model implements HasMedia
+class Banner extends Model
 {
-    use HasFactory, InteractsWithMedia;
+    use HasFactory;
 
-    protected $guarded = [];
+    protected $fillable = [
+        'id',
+        'title',
+        'url',
+        'content',
+        'banner_image'
+    ];
 
-    public function category(): BelongsTo
+    protected $casts = [
+        'banner_image' => 'json', // Cast the profile_images attribute to an array
+    ];
+
+    // Ensure the model handles file uploads correctly
+    protected function setBannerImageAttribute($value)
     {
-        return $this->belongsTo(Category::class, 'category_id', 'id');
+        $this->attributes['banner_image'] = is_string($value) ? $value : json_encode($value);
     }
 
-    public function country(): BelongsTo
+    public function getBannerUrl()
     {
-        return $this->belongsTo(Country::class, 'country_id', 'id');
+        if ($this->banner_image) {
+            // Check if post_thumbnail is already an array
+            $bannerImage = is_array($this->banner_image) ? $this->banner_image : json_decode($this->banner_image, true);
+    
+            if ($bannerImage && is_array($bannerImage)) {
+                $imageKey = reset($bannerImage);
+                return Storage::disk('s3')->url($imageKey);
+            }
+        }
+        return null;
     }
-
 }
